@@ -1,0 +1,50 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path(
+        "organizations/<uuid:org_id>/objectives/",
+        views.objectives_list,
+        name="objectives-list",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/",
+        views.objective_detail,
+        name="objective-detail",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/submit/",
+        views.objective_submit,
+        name="objective-submit",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/approve/",
+        views.objective_approve,
+        name="objective-approve",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/reject/",
+        views.objective_reject,
+        name="objective-reject",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/archive/",
+        views.objective_archive,
+        name="objective-archive",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/key-results/",
+        views.key_results_list,
+        name="key-results-list",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/key-results/<uuid:kr_id>/",
+        views.key_result_detail,
+        name="key-result-detail",
+    ),
+    path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/key-results/<uuid:kr_id>/history/",
+        views.key_result_history,
+        name="key-result-history",
+    ),
+]

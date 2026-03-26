@@ -1,0 +1,20 @@
+kind = "api"
+previewPath = "/zenko"
+title = "Zenko API (Django)"
+version = "1.0.0"
+
+[[services]]
+localPort = 8000
+name = "Zenko Django API"
+paths = ["/zenko"]
+
+[services.development]
+run = "cd artifacts/zenko-api && python3 manage.py runserver 0.0.0.0:8000"
+
+[services.production]
+
+[services.production.run]
+args = ["python3", "artifacts/zenko-api/manage.py", "runserver", "0.0.0.0:8000"]
+
+[services.production.run.env]
+PORT = "8000"

@@ -2,10 +2,11 @@
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+pnpm workspace monorepo using TypeScript. Also contains a Django REST Framework API (`artifacts/zenko-api/`) for the Zenko Performance Management Platform.
 
 ## Stack
 
+### Node.js (existing)
 - **Monorepo tool**: pnpm workspaces
 - **Node.js version**: 24
 - **Package manager**: pnpm
@@ -16,12 +17,30 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
 
+### Python (Zenko Django API)
+- **Python version**: 3.12
+- **Framework**: Django 6 + Django REST Framework 3.17
+- **Database**: PostgreSQL (shared with Node.js, via psycopg2-binary)
+- **Auth**: Token-based (DRF TokenAuthentication)
+- **Path**: `artifacts/zenko-api/`
+- **Port**: 8000 (dev server)
+- **Base URL**: `http://localhost:8000/zenko/api/v1/`
+
 ## Structure
 
 ```text
 artifacts-monorepo/
 ├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
+│   ├── api-server/         # Express API server (Node.js)
+│   └── zenko-api/          # Django REST Framework API (Python)
+│       ├── manage.py
+│       ├── requirements.txt
+│       ├── start.sh        # Migrate + run server
+│       ├── zenko/          # Django project settings + urls
+│       └── apps/
+│           ├── authentication/  # Custom User + Token auth
+│           ├── organizations/   # Organization + Membership
+│           └── okr/             # Objectives, KeyResults, KeyResultHistory
 ├── lib/                    # Shared libraries
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -94,3 +113,73 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+
+---
+
+## Zenko API (`artifacts/zenko-api`) — Django REST Framework
+
+The Zenko OKR Core API is a standalone Django REST Framework project for the Zenko Performance Management Platform. It runs on port 8000.
+
+**Start the server:** Workflow "Zenko Django API" runs `bash artifacts/zenko-api/start.sh` (auto-migrates then starts Django dev server).
+
+**Migrations:** `cd artifacts/zenko-api && python3 manage.py makemigrations && python3 manage.py migrate`
+
+### API Base URL (development)
+`http://localhost:8000/zenko/api/v1/`
+
+### Authentication Endpoints
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/zenko/api/v1/auth/register/` | None | Register + get token |
+| POST | `/zenko/api/v1/auth/login/` | None | Login + get token |
+| POST | `/zenko/api/v1/auth/logout/` | Token | Invalidate token |
+| GET  | `/zenko/api/v1/auth/me/` | Token | Current user info |
+
+### Organization Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/zenko/api/v1/organizations/` | Create org (creator = Org Admin) |
+| GET  | `/zenko/api/v1/organizations/` | List my organizations |
+| GET  | `/zenko/api/v1/organizations/{org_id}/` | Org detail |
+| POST | `/zenko/api/v1/organizations/{org_id}/members/` | Add member with role |
+| GET  | `/zenko/api/v1/organizations/{org_id}/members/` | List members |
+
+### Objective Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/` | Create (draft or auto-approved for admins) |
+| GET  | `/zenko/api/v1/organizations/{org_id}/objectives/` | List active objectives |
+| GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/` | Detail with KRs + progress |
+| PATCH| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/` | Update |
+| DELETE| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/` | Delete |
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/submit/` | Submit for approval |
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/approve/` | Approve |
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/reject/` | Reject (requires `reason`) |
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/archive/` | Archive |
+
+### Key Result Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/` | Create KR (weightage overflow blocked) |
+| GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/` | List KRs |
+| GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | KR detail |
+| PATCH| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | Update KR value (logs history) |
+| DELETE| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | Delete |
+| GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/history/` | History log |
+
+### Business Rules
+- **Objective status lifecycle:** `draft` → `pending_approval` → `approved` / `rejected`. Admins auto-approve on create.
+- **Quarter auto-computed** from `due_date` (e.g., due June 30 → Q2-2026).
+- **KR weightage validation:** Total cannot exceed 100%. `progress_pct` on Objective is `null` unless KRs sum to exactly 100%.
+- **KR RAG status:** auto-computed on value change (not_started → red/amber/green based on progress %).
+- **KR history:** Every value/RAG change creates an immutable record.
+- **Token header:** `Authorization: Token <token>`
+
+### Roles
+| Role | Capabilities |
+|------|-------------|
+| `app_admin` | All operations across all orgs |
+| `org_admin` | Full org access; auto-approves own objectives |
+| `hr_manager` | View all + approve/reject objectives |
+| `team_lead` | View team + approve/reject objectives |
+| `team_member` | Own objectives only; needs approval |
