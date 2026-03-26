@@ -69,12 +69,11 @@ class Objective(models.Model):
     def progress_pct(self):
         """
         Weighted average of Key Result progress.
-        Returns None if KR weightages don't sum to 100.
-        Returns 0.0 if no KRs.
+        Returns None if there are no KRs or if KR weightages don't sum to 100.
         """
         krs = list(self.key_results.all())
         if not krs:
-            return 0.0
+            return None
         total_weight = sum(kr.weightage for kr in krs)
         if total_weight != 100:
             return None
