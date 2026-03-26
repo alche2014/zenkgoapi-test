@@ -2,7 +2,7 @@
   "info": {
     "name": "Zenko OKR API",
     "_postman_id": "zenko-okr-api-v1",
-    "description": "# Zenko OKR Core API\n\nBase URL: `{{base_url}}/zenko/api/v1/`\n\n## Quick Start (run in order)\n1. **Auth → Register** — creates a user and auto-sets `{{token}}`.\n2. **Organizations → Create Organization** — creates an org and auto-sets `{{org_id}}`.\n3. **Objectives → Create Objective** — org admins are auto-approved; auto-sets `{{obj_id}}`.\n4. **Key Results → Bulk Replace KRs** — atomically sets multiple KRs (total must = 100%); auto-sets `{{kr_id}}`.\n5. Use **Objectives → Submit / Approve** if the objective was created by a non-admin (draft → pending → approved).\n\n## Weightage Rules\n- **Single KR create/update**: the cumulative total including the new KR must equal **exactly 100%**.\n- **Bulk replace** (`PUT /key-results/bulk/`): send an array; the batch total must equal **100%**. Use this to define 2+ KRs in one shot.\n- `progress_pct` on an Objective returns `null` until KR weights sum to 100%.\n\n## Auth\nAll endpoints except `/auth/register/` and `/auth/login/` require:\n```\nAuthorization: Token {{token}}\n```\n\n## Collection Variables\n| Variable | Set by | Description |\n|----------|--------|-------------|\n| `base_url` | Manually | Server host (default `http://localhost:8000`) |\n| `token` | Register / Login response | Bearer token for auth |\n| `org_id` | Create Organization response | Active organization UUID |\n| `obj_id` | Create Objective response | Active objective UUID |\n| `kr_id` | Bulk Replace KRs response (first item) | Active KR UUID |",
+    "description": "# Zenko OKR Core API\n\nBase URL: `{{base_url}}/zenko/api/v1/`\n\n## Quick Start (run in order)\n1. **Auth → Register** — creates a user and auto-sets `{{token}}`.\n2. **Organizations → Create Organization** — creates an org and auto-sets `{{org_id}}`.\n3. **Objectives → Create Objective** — org admins are auto-approved; auto-sets `{{obj_id}}`.\n4. **Key Results → Bulk Replace KRs** — atomically sets multiple KRs (total must = 100%); auto-sets `{{kr_id}}`.\n5. Use **Objectives → Submit / Approve** if the objective was created by a non-admin (draft → pending → approved).\n\n## Weightage Rules\n- **Single KR create/update**: the cumulative total including the new KR must equal **exactly 100%**.\n- **Bulk replace** (`PUT /key-results/bulk/`): send an array; the batch total must equal **100%**. Use this to define 2+ KRs in one shot.\n- `progress_pct` on an Objective returns `null` until KR weights sum to 100%.\n\n## Auth\nAll endpoints except `/auth/register/` and `/auth/login/` require:\n```\nAuthorization: Token {{token}}\n```\n\n## Collection Variables\n| Variable | Set by | Description |\n|----------|--------|-------------|\n| `base_url` | Manually | Server host (default `http://localhost:8000`) |\n| `token` | Register / Login response | Bearer token for auth |\n| `org_id` | Create Organization response | Active organization UUID |\n| `obj_id` | Create Objective response | Active objective UUID |\n| `kr_id` | Bulk Replace KRs response (first item) | Active KR UUID |\n| `member_id` | Add Member response | Active membership UUID |",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -35,6 +35,12 @@
       "value": "",
       "type": "string",
       "description": "Key Result UUID. Auto-populated by Bulk Replace KRs (first item in response)."
+    },
+    {
+      "key": "member_id",
+      "value": "",
+      "type": "string",
+      "description": "Membership UUID. Auto-populated by Add Member."
     }
   ],
   "item": [
@@ -221,6 +227,21 @@
         },
         {
           "name": "Add Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('member_id', body.id);",
+                  "    console.log('member_id set:', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -254,6 +275,59 @@
               "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", ""]
             },
             "description": "Lists all members of the organization along with their roles."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Member Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/members/{{member_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", "{{member_id}}", ""]
+            },
+            "description": "Returns the membership record for a single member. Any member of the org may read this. `{{member_id}}` is set by the Add Member request."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Member Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"hr_manager\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/members/{{member_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", "{{member_id}}", ""]
+            },
+            "description": "Updates the role of an existing member. **Requires admin-level role** (`org_admin` or `app_admin`).\n\n**Available roles:** `app_admin`, `org_admin`, `hr_manager`, `team_lead`, `team_member`"
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Member",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/members/{{member_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", "{{member_id}}", ""]
+            },
+            "description": "Removes a member from the organization. **Requires admin-level role.** Returns HTTP 204 on success."
           },
           "response": []
         }
