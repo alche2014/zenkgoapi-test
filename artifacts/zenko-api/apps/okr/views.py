@@ -109,10 +109,7 @@ def objective_submit(request, org_id, objective_id):
     if objective.created_by != request.user and not membership.is_admin_level:
         return Response({"detail": "You can only submit your own objectives."}, status=status.HTTP_403_FORBIDDEN)
 
-    if membership.is_admin_level:
-        objective.status = Objective.Status.APPROVED
-    else:
-        objective.status = Objective.Status.PENDING_APPROVAL
+    objective.status = Objective.Status.PENDING_APPROVAL
     objective.save(update_fields=["status", "updated_at"])
 
     return Response(ObjectiveSerializer(objective, context={"request": request}).data)
@@ -127,7 +124,7 @@ def objective_approve(request, org_id, objective_id):
 
     if not membership.can_approve_objectives:
         return Response(
-            {"detail": "Only Team Leads, HR Managers, and Admins can approve objectives."},
+            {"detail": "Only Team Leads and Org Admins can approve objectives."},
             status=status.HTTP_403_FORBIDDEN,
         )
 
@@ -158,7 +155,7 @@ def objective_reject(request, org_id, objective_id):
 
     if not membership.can_approve_objectives:
         return Response(
-            {"detail": "Only Team Leads, HR Managers, and Admins can reject objectives."},
+            {"detail": "Only Team Leads and Org Admins can reject objectives."},
             status=status.HTTP_403_FORBIDDEN,
         )
 
@@ -251,11 +248,23 @@ def key_result_detail(request, org_id, objective_id, kr_id):
     if request.method == "GET":
         return Response(KeyResultSerializer(kr, context={"request": request}).data)
 
+    def _can_write_kr(membership, kr, user):
+        return (
+            membership.is_admin_level
+            or kr.created_by == user
+            or kr.owner == user
+            or (kr.co_owner and kr.co_owner == user)
+            or kr.objective.owner == user
+        )
+
     if request.method == "DELETE":
-        if not membership.is_admin_level and kr.created_by != request.user:
+        if not _can_write_kr(membership, kr, request.user):
             return Response({"detail": "You cannot delete this Key Result."}, status=status.HTTP_403_FORBIDDEN)
         kr.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    if not _can_write_kr(membership, kr, request.user):
+        return Response({"detail": "You cannot edit this Key Result."}, status=status.HTTP_403_FORBIDDEN)
 
     partial = request.method == "PATCH"
     serializer = KeyResultSerializer(kr, data=request.data, partial=partial, context={"request": request})

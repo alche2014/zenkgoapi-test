@@ -66,4 +66,4 @@ class Membership(models.Model):
 
     @property
     def can_approve_objectives(self):
-        return self.role in (self.Role.APP_ADMIN, self.Role.ORG_ADMIN, self.Role.TEAM_LEAD, self.Role.HR_MANAGER)
+        return self.role in (self.Role.ORG_ADMIN, self.Role.TEAM_LEAD)
