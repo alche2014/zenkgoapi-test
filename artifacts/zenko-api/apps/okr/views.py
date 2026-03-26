@@ -81,8 +81,14 @@ def objective_detail(request, org_id, objective_id):
     if objective.status == Objective.Status.ARCHIVED:
         return Response({"detail": "Archived objectives cannot be edited."}, status=status.HTTP_400_BAD_REQUEST)
 
+    from apps.organizations.models import Organization as Org
+    try:
+        org_obj = Org.objects.get(id=org_id)
+    except Org.DoesNotExist:
+        return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
+
     partial = request.method == "PATCH"
-    serializer = ObjectiveSerializer(objective, data=request.data, partial=partial, context={"request": request})
+    serializer = ObjectiveSerializer(objective, data=request.data, partial=partial, context={"request": request, "organization": org_obj})
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(ObjectiveSerializer(objective, context={"request": request}).data)
@@ -328,9 +334,15 @@ def key_results_bulk(request, org_id, objective_id):
             "remaining": 100 - total_weightage,
         }, status=status.HTTP_400_BAD_REQUEST)
 
+    from apps.organizations.models import Organization as Org
+    try:
+        org_obj = Org.objects.get(id=org_id)
+    except Org.DoesNotExist:
+        return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
+
     serializers_list = []
     for item in items:
-        ser = KeyResultSerializer(data=item, context={"request": request, "bulk_replace": True})
+        ser = KeyResultSerializer(data=item, context={"request": request, "bulk_replace": True, "organization": org_obj})
         if not ser.is_valid():
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
         serializers_list.append(ser)
