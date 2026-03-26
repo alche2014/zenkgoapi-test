@@ -5,7 +5,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SECRET_KEY = config("SECRET_KEY", default="django-insecure-zenko-dev-key-change-in-production")
 DEBUG = config("DEBUG", default=True, cast=bool)
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*").split(",") if not DEBUG else ["*"]
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -91,7 +91,7 @@ REST_FRAMEWORK = {
     "EXCEPTION_HANDLER": "rest_framework.views.exception_handler",
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

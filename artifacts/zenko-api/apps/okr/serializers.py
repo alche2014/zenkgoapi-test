@@ -79,7 +79,7 @@ class KeyResultSerializer(serializers.ModelSerializer):
         if new_total != 100:
             remaining = 100 - new_total
             raise serializers.ValidationError({
-                "error": "Weightage validation failed. Total KR weightages must equal exactly 100%.",
+                "error": "Weightage validation failed",
                 "current_total": new_total,
                 "remaining": remaining,
             })
