@@ -43,12 +43,19 @@ class KeyResultSerializer(serializers.ModelSerializer):
     def get_history_count(self, obj):
         return obj.history.count()
 
+    def _check_org_member(self, user_id, label):
+        from apps.organizations.models import Membership
+        org = self.context.get("organization")
+        if org and not Membership.objects.filter(user_id=user_id, organization=org).exists():
+            raise serializers.ValidationError(f"{label} must be a member of this organization.")
+
     def validate_owner_id(self, value):
         from apps.authentication.models import User
         try:
             User.objects.get(pk=value)
         except User.DoesNotExist:
             raise serializers.ValidationError("Owner user not found.")
+        self._check_org_member(value, "Owner")
         return value
 
     def validate_co_owner_id(self, value):
@@ -59,6 +66,7 @@ class KeyResultSerializer(serializers.ModelSerializer):
             User.objects.get(pk=value)
         except User.DoesNotExist:
             raise serializers.ValidationError("Co-owner user not found.")
+        self._check_org_member(value, "Co-owner")
         return value
 
     def validate_weightage(self, value):
@@ -179,10 +187,14 @@ class ObjectiveSerializer(serializers.ModelSerializer):
 
     def validate_owner_id(self, value):
         from apps.authentication.models import User
+        from apps.organizations.models import Membership
         try:
             User.objects.get(pk=value)
         except User.DoesNotExist:
             raise serializers.ValidationError("Owner user not found.")
+        org = self.context.get("organization")
+        if org and not Membership.objects.filter(user_id=value, organization=org).exists():
+            raise serializers.ValidationError("Owner must be a member of this organization.")
         return value
 
     def create(self, validated_data):

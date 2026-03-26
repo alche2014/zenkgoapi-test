@@ -47,7 +47,7 @@ def objectives_list(request, org_id):
     data["organization"] = str(org_id)
     serializer = ObjectiveSerializer(
         data=data,
-        context={"request": request}
+        context={"request": request, "organization": org}
     )
     serializer.is_valid(raise_exception=True)
     objective = serializer.save(organization=org)
@@ -231,9 +231,15 @@ def key_results_list(request, org_id, objective_id):
         krs = KeyResult.objects.filter(objective=objective).select_related("owner", "co_owner")
         return Response(KeyResultSerializer(krs, many=True, context={"request": request}).data)
 
+    from apps.organizations.models import Organization as Org
+    try:
+        org_obj = Org.objects.get(id=org_id)
+    except Org.DoesNotExist:
+        return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
+
     data = request.data.copy()
     data["objective"] = str(objective_id)
-    serializer = KeyResultSerializer(data=data, context={"request": request})
+    serializer = KeyResultSerializer(data=data, context={"request": request, "organization": org_obj})
     serializer.is_valid(raise_exception=True)
     kr = serializer.save(objective=objective)
     return Response(KeyResultSerializer(kr, context={"request": request}).data, status=status.HTTP_201_CREATED)
@@ -277,8 +283,14 @@ def key_result_detail(request, org_id, objective_id, kr_id):
     if not _can_write_kr(membership, kr, request.user):
         return Response({"detail": "You cannot edit this Key Result."}, status=status.HTTP_403_FORBIDDEN)
 
+    from apps.organizations.models import Organization as Org
+    try:
+        org_obj = Org.objects.get(id=org_id)
+    except Org.DoesNotExist:
+        return Response({"detail": "Organization not found."}, status=status.HTTP_404_NOT_FOUND)
+
     partial = request.method == "PATCH"
-    serializer = KeyResultSerializer(kr, data=request.data, partial=partial, context={"request": request})
+    serializer = KeyResultSerializer(kr, data=request.data, partial=partial, context={"request": request, "organization": org_obj})
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response(KeyResultSerializer(kr, context={"request": request}).data)
