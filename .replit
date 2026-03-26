@@ -9,6 +9,8 @@ id = "artifacts/mockup-sandbox"
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
+build = ["sh", "-c", "cd artifacts/zenko-api && pip install -r requirements.txt && python manage.py migrate --no-input"]
+run = ["sh", "-c", "cd artifacts/zenko-api && gunicorn zenko.wsgi:application --bind 0.0.0.0:8000 --workers 2"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]

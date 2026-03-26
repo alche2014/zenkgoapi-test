@@ -2,7 +2,7 @@
   "info": {
     "name": "Zenko OKR API",
     "_postman_id": "zenko-okr-api-v1",
-    "description": "# Zenko OKR Core API\n\nBase URL: `{{base_url}}/zenko/api/v1/`\n\n## Quick Start (run in order)\n1. **Auth → Register** — creates a user and auto-sets `{{token}}`.\n2. **Organizations → Create Organization** — creates an org and auto-sets `{{org_id}}`.\n3. **Objectives → Create Objective** — org admins are auto-approved; auto-sets `{{obj_id}}`.\n4. **Key Results → Bulk Replace KRs** — atomically sets multiple KRs (total must = 100%); auto-sets `{{kr_id}}`.\n5. Use **Objectives → Submit / Approve** if the objective was created by a non-admin (draft → pending → approved).\n\n## Weightage Rules\n- **Single KR create/update**: the cumulative total including the new KR must equal **exactly 100%**.\n- **Bulk replace** (`PUT /key-results/bulk/`): send an array; the batch total must equal **100%**. Use this to define 2+ KRs in one shot.\n- `progress_pct` on an Objective returns `null` until KR weights sum to 100%.\n\n## Auth\nAll endpoints except `/auth/register/` and `/auth/login/` require:\n```\nAuthorization: Token {{token}}\n```\n\n## Collection Variables\n| Variable | Set by | Description |\n|----------|--------|-------------|\n| `base_url` | Manually | Server host (default `http://localhost:8000`) |\n| `token` | Register / Login response | Bearer token for auth |\n| `org_id` | Create Organization response | Active organization UUID |\n| `obj_id` | Create Objective response | Active objective UUID |\n| `kr_id` | Bulk Replace KRs response (first item) | Active KR UUID |\n| `member_id` | Add Member response | Active membership UUID |",
+    "description": "# Zenko OKR Core API\n\nBase URL: `{{base_url}}/zenko/api/v1/`\n\n## Quick Start (run in order)\n1. **Auth → Register** — creates a user and auto-sets `{{token}}`.\n2. **Organizations → Create Organization** — creates an org and auto-sets `{{org_id}}`.\n3. **Objectives → Create Objective** — org admins are auto-approved; auto-sets `{{obj_id}}`.\n4. **Key Results → Bulk Replace KRs** — atomically sets multiple KRs (total must = 100%); auto-sets `{{kr_id}}`.\n5. Use **Objectives → Submit / Approve** if the objective was created by a non-admin (draft → pending → approved).\n\n## Weightage Rules\n- **Single KR create/update**: the cumulative total including the new KR must equal **exactly 100%**.\n- **Bulk replace** (`PUT /key-results/bulk/`): send an array; the batch total must equal **100%**. Use this to define 2+ KRs in one shot.\n- `progress_pct` on an Objective returns `null` until KR weights sum to 100%.\n\n## Auth\nAll endpoints except `/auth/register/` and `/auth/login/` require:\n```\nAuthorization: Token {{token}}\n```\n\n## Collection Variables\n| Variable | Set by | Description |\n|----------|--------|-------------|\n| `base_url` | Manually | Server host (default `http://localhost:8000`) |\n| `token` | Register / Login response | Bearer token for auth |\n| `org_id` | Create Organization response | Active organization UUID |\n| `obj_id` | Create Objective response | Active objective UUID |\n| `kr_id` | Bulk Replace KRs response (first item) | Active KR UUID |\n| `member_id` | Add Member response | Active membership UUID |\n| `user_id` | Register / Login response | UUID of the authenticated user (used as owner_id) |\n| `member_token` | Register Second User response | Token for the second (team_member) user — used in RBAC tests |",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -41,6 +41,18 @@
       "value": "",
       "type": "string",
       "description": "Membership UUID. Auto-populated by Add Member."
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string",
+      "description": "UUID of the currently authenticated admin user. Auto-populated by Register or Login. Used as owner_id in Objectives and KRs."
+    },
+    {
+      "key": "member_token",
+      "value": "",
+      "type": "string",
+      "description": "Auth token for the second (team_member) user. Auto-populated by Negative & RBAC Tests → Register Second User."
     }
   ],
   "item": [
@@ -58,7 +70,9 @@
                   "if (pm.response.code === 201) {",
                   "    const body = pm.response.json();",
                   "    pm.collectionVariables.set('token', body.token);",
+                  "    pm.collectionVariables.set('user_id', body.user.id);",
                   "    console.log('Token set:', body.token.slice(0, 8) + '...');",
+                  "    console.log('user_id set:', body.user.id);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -93,7 +107,9 @@
                   "if (pm.response.code === 200) {",
                   "    const body = pm.response.json();",
                   "    pm.collectionVariables.set('token', body.token);",
+                  "    pm.collectionVariables.set('user_id', body.user.id);",
                   "    console.log('Token set:', body.token.slice(0, 8) + '...');",
+                  "    console.log('user_id set:', body.user.id);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -362,7 +378,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Increase ARR by 30%\",\n  \"description\": \"Grow annual recurring revenue by expanding enterprise accounts and reducing churn.\",\n  \"owner_id\": 1,\n  \"priority\": \"high\",\n  \"due_date\": \"2026-09-30\"\n}"
+              "raw": "{\n  \"title\": \"Increase ARR by 30%\",\n  \"description\": \"Grow annual recurring revenue by expanding enterprise accounts and reducing churn.\",\n  \"owner_id\": \"{{user_id}}\",\n  \"priority\": \"high\",\n  \"due_date\": \"2026-09-30\"\n}"
             },
             "url": {
               "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/",
@@ -545,7 +561,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Monthly Recurring Revenue\",\n  \"metric_label\": \"MRR in USD\",\n  \"type\": \"currency\",\n  \"start_value\": 100000,\n  \"target_value\": 130000,\n  \"current_value\": 100000,\n  \"unit\": \"USD\",\n  \"owner_id\": 1,\n  \"due_date\": \"2026-09-30\",\n  \"weightage\": 100\n}"
+              "raw": "{\n  \"title\": \"Monthly Recurring Revenue\",\n  \"metric_label\": \"MRR in USD\",\n  \"type\": \"currency\",\n  \"start_value\": 100000,\n  \"target_value\": 130000,\n  \"current_value\": 100000,\n  \"unit\": \"USD\",\n  \"owner_id\": \"{{user_id}}\",\n  \"due_date\": \"2026-09-30\",\n  \"weightage\": 100\n}"
             },
             "url": {
               "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/",
@@ -599,7 +615,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "[\n  {\n    \"title\": \"Monthly Recurring Revenue\",\n    \"metric_label\": \"MRR in USD\",\n    \"type\": \"currency\",\n    \"start_value\": 100000,\n    \"target_value\": 130000,\n    \"current_value\": 100000,\n    \"unit\": \"USD\",\n    \"owner_id\": 1,\n    \"due_date\": \"2026-09-30\",\n    \"weightage\": 60\n  },\n  {\n    \"title\": \"New Enterprise Customers\",\n    \"metric_label\": \"Enterprise accounts signed\",\n    \"type\": \"numeric\",\n    \"start_value\": 0,\n    \"target_value\": 10,\n    \"current_value\": 0,\n    \"unit\": \"accounts\",\n    \"owner_id\": 1,\n    \"due_date\": \"2026-09-30\",\n    \"weightage\": 40\n  }\n]"
+              "raw": "[\n  {\n    \"title\": \"Monthly Recurring Revenue\",\n    \"metric_label\": \"MRR in USD\",\n    \"type\": \"currency\",\n    \"start_value\": 100000,\n    \"target_value\": 130000,\n    \"current_value\": 100000,\n    \"unit\": \"USD\",\n    \"owner_id\": \"{{user_id}}\",\n    \"due_date\": \"2026-09-30\",\n    \"weightage\": 60\n  },\n  {\n    \"title\": \"New Enterprise Customers\",\n    \"metric_label\": \"Enterprise accounts signed\",\n    \"type\": \"numeric\",\n    \"start_value\": 0,\n    \"target_value\": 10,\n    \"current_value\": 0,\n    \"unit\": \"accounts\",\n    \"owner_id\": \"{{user_id}}\",\n    \"due_date\": \"2026-09-30\",\n    \"weightage\": 40\n  }\n]"
             },
             "url": {
               "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/bulk/",
@@ -665,6 +681,27 @@
         },
         {
           "name": "Get KR History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('History has at least one entry', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.be.an('array');",
+                  "    pm.expect(body.length, 'Expected ≥1 history entry — run Update KR Value first').to.be.at.least(1);",
+                  "    const entry = body[0];",
+                  "    pm.expect(entry).to.have.property('previous_value');",
+                  "    pm.expect(entry).to.have.property('new_value');",
+                  "    pm.expect(entry).to.have.property('new_rag_status');",
+                  "    pm.expect(entry).to.have.property('recorded_at');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [
@@ -675,7 +712,184 @@
               "host": ["{{base_url}}"],
               "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", "{{kr_id}}", "history", ""]
             },
-            "description": "Returns the immutable audit log of all value and RAG status changes for this KR, newest first. Each entry records `previous_value`, `new_value`, `previous_rag_status`, `new_rag_status`, `note`, `updated_by`, and `recorded_at`."
+            "description": "Returns the immutable audit log of all value and RAG status changes for this KR, newest first. Each entry records `previous_value`, `new_value`, `previous_rag_status`, `new_rag_status`, `note`, `updated_by`, and `recorded_at`.\n\n**Automated assertion:** Verifies ≥1 history entry exists and that each entry has the expected fields. Run **Update KR Value** before this request to ensure at least one history record is present."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Negative & RBAC Tests",
+      "description": "Requests that verify the API correctly enforces its rules by returning error status codes.\n\n**Run order:**\n1. Register Second User — creates a `team_member` and captures `{{member_token}}`\n2. Add Second User to Org as Team Member — so the user is a known member\n3. Create KR — Invalid Weightage — verifies 400 on bad weightage\n4. Submit Without KRs — verifies 400 when KR total ≠ 100%\n5. Approve Objective as Team Member — verifies 403 for insufficient role\n\n**Prerequisites:** Complete the main happy-path flow first (Register → Create Org → Create Objective).",
+      "item": [
+        {
+          "name": "Register Second User (team_member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('member_token', body.token);",
+                  "    console.log('member_token set for RBAC tests');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"member@zenko.com\",\n  \"username\": \"member1\",\n  \"first_name\": \"Team\",\n  \"last_name\": \"Member\",\n  \"password\": \"Member@1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "auth", "register", ""]
+            },
+            "description": "Registers a second user who will be added to the org as a `team_member`. Their token is saved to `{{member_token}}` for use in RBAC tests."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Second User to Org as Team Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"member@zenko.com\",\n  \"role\": \"team_member\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/members/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", ""]
+            },
+            "description": "Adds the second user (already registered) to the org as a `team_member`. Uses the admin `{{token}}`. Adds by existing email — user account was created in the previous step."
+          },
+          "response": []
+        },
+        {
+          "name": "Create KR — Invalid Weightage (expects 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Error mentions weightage', () => {",
+                  "    const body = pm.response.json();",
+                  "    const text = JSON.stringify(body).toLowerCase();",
+                  "    pm.expect(text).to.include.oneOf(['weight', '100']);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Incomplete KR\",\n  \"metric_label\": \"Units\",\n  \"type\": \"numeric\",\n  \"start_value\": 0,\n  \"target_value\": 100,\n  \"current_value\": 0,\n  \"unit\": \"units\",\n  \"owner_id\": \"{{user_id}}\",\n  \"due_date\": \"2026-09-30\",\n  \"weightage\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", ""]
+            },
+            "description": "**Negative test.** Sends a single KR with `weightage: 50`. Since 50% ≠ 100%, the API must reject this with **HTTP 400**.\n\nThe automated test asserts the 400 status and that the error message references weightage or 100.\n\n**Prerequisite:** The objective must have no existing KRs (so the running total after this KR would be 50%, not 100%). If you ran the bulk replace earlier, delete those KRs first or use a fresh objective."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Objective Without Valid KR Weights (expects 400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('Error references weightage or KR', () => {",
+                  "    const body = pm.response.json();",
+                  "    const text = JSON.stringify(body).toLowerCase();",
+                  "    pm.expect(text).to.include.oneOf(['weight', 'key result', '100']);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/submit/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "submit", ""]
+            },
+            "description": "**Negative test.** Attempts to submit an objective whose KR weights do not sum to 100%. The API must reject this with **HTTP 400**.\n\nThe automated test asserts the 400 status and that the error message references weightage.\n\n**Prerequisite:** Use an objective that either has no KRs or has KRs whose weights sum to something other than 100% (e.g. after the invalid-weightage KR above was rejected but the obj still has no valid KRs)."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Objective as Team Member (expects 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));",
+                  "pm.test('Error indicates insufficient role', () => {",
+                  "    const body = pm.response.json();",
+                  "    const text = JSON.stringify(body).toLowerCase();",
+                  "    pm.expect(text).to.include.oneOf(['permission', 'forbidden', 'role', 'not allowed']);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{member_token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/approve/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "approve", ""]
+            },
+            "description": "**RBAC test.** Uses `{{member_token}}` (a `team_member`) to call the approve endpoint. Only `org_admin` and `team_lead` may approve — the API must return **HTTP 403**.\n\nThe automated test asserts the 403 status and that the error body contains a permission-related message.\n\n**Prerequisite:** Run **Register Second User** and **Add Second User to Org as Team Member** first to populate `{{member_token}}`."
           },
           "response": []
         }
