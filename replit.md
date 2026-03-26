@@ -160,17 +160,18 @@ The Zenko OKR Core API is a standalone Django REST Framework project for the Zen
 ### Key Result Endpoints
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/` | Create KR (weightage overflow blocked) |
+| POST | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/` | Create single KR — total including new KR must equal exactly 100% |
 | GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/` | List KRs |
+| PUT  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/bulk/` | Atomically replace all KRs (array body, total must == 100%) |
 | GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | KR detail |
-| PATCH| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | Update KR value (logs history) |
+| PATCH| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | Update KR (total must remain == 100%) |
 | DELETE| `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/` | Delete |
 | GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/history/` | History log |
 
 ### Business Rules
 - **Objective status lifecycle:** `draft` → `pending_approval` → `approved` / `rejected`. Org admins auto-approve on CREATE.
 - **Quarter auto-computed** from `due_date` (e.g., due June 30 → Q2-2026).
-- **KR weightage validation (create/update):** Total cannot exceed 100% — incremental building is allowed.
+- **KR weightage on individual create/update:** The cumulative total (including the new/updated KR) must equal exactly 100%. Use the bulk PUT endpoint to atomically define multiple KRs.
 - **KR weightage at submit:** When submitting an objective for approval, all KR weightages must sum to exactly 100% or the submit is rejected with a 400.
 - **progress_pct on Objective:** Returns `null` unless KR weightages sum to exactly 100%.
 - **KR RAG status:** auto-computed on value change (not_started → red/amber/green based on progress %).

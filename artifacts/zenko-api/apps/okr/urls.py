@@ -38,6 +38,11 @@ urlpatterns = [
         name="key-results-list",
     ),
     path(
+        "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/key-results/bulk/",
+        views.key_results_bulk,
+        name="key-results-bulk",
+    ),
+    path(
         "organizations/<uuid:org_id>/objectives/<uuid:objective_id>/key-results/<uuid:kr_id>/",
         views.key_result_detail,
         name="key-result-detail",

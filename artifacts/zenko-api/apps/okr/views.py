@@ -284,6 +284,70 @@ def key_result_detail(request, org_id, objective_id, kr_id):
     return Response(KeyResultSerializer(kr, context={"request": request}).data)
 
 
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def key_results_bulk(request, org_id, objective_id):
+    """
+    Atomically replace all Key Results for an objective.
+    Validates that the sum of all provided weightages equals exactly 100%.
+    Accepts a JSON array of KR objects.
+    """
+    membership = get_membership(request.user, org_id)
+    if not membership:
+        return Response({"detail": "Not a member of this organization."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        objective = Objective.objects.get(id=objective_id, organization_id=org_id)
+    except Objective.DoesNotExist:
+        return Response({"detail": "Objective not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not membership.is_admin_level and objective.owner != request.user and objective.created_by != request.user:
+        return Response({"detail": "You cannot manage Key Results for this objective."}, status=status.HTTP_403_FORBIDDEN)
+
+    items = request.data
+    if not isinstance(items, list) or len(items) == 0:
+        return Response({"detail": "Provide a non-empty JSON array of Key Results."}, status=status.HTTP_400_BAD_REQUEST)
+
+    total_weightage = sum(item.get("weightage", 0) for item in items)
+    if total_weightage != 100:
+        return Response({
+            "error": "Weightage validation failed",
+            "current_total": total_weightage,
+            "remaining": 100 - total_weightage,
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+    serializers_list = []
+    for item in items:
+        ser = KeyResultSerializer(data=item, context={"request": request, "bulk_replace": True})
+        if not ser.is_valid():
+            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializers_list.append(ser)
+
+    from django.db import transaction
+    from apps.authentication.models import User
+    with transaction.atomic():
+        objective.key_results.all().delete()
+        created = []
+        for ser in serializers_list:
+            vd = dict(ser.validated_data)
+            owner_id = vd.pop("owner_id")
+            co_owner_id = vd.pop("co_owner_id", None)
+            owner = User.objects.get(pk=owner_id)
+            co_owner = User.objects.get(pk=co_owner_id) if co_owner_id else None
+            kr = KeyResult.objects.create(
+                objective=objective,
+                owner=owner,
+                co_owner=co_owner,
+                created_by=request.user,
+                **vd,
+            )
+            kr.rag_status = kr.compute_rag()
+            kr.save(update_fields=["rag_status"])
+            created.append(kr)
+
+    return Response(KeyResultSerializer(created, many=True, context={"request": request}).data, status=status.HTTP_200_OK)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def key_result_history(request, org_id, objective_id, kr_id):
