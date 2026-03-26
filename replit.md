@@ -168,9 +168,11 @@ The Zenko OKR Core API is a standalone Django REST Framework project for the Zen
 | GET  | `/zenko/api/v1/organizations/{org_id}/objectives/{obj_id}/key-results/{kr_id}/history/` | History log |
 
 ### Business Rules
-- **Objective status lifecycle:** `draft` → `pending_approval` → `approved` / `rejected`. Admins auto-approve on create.
+- **Objective status lifecycle:** `draft` → `pending_approval` → `approved` / `rejected`. Org admins auto-approve on CREATE.
 - **Quarter auto-computed** from `due_date` (e.g., due June 30 → Q2-2026).
-- **KR weightage validation:** Total cannot exceed 100%. `progress_pct` on Objective is `null` unless KRs sum to exactly 100%.
+- **KR weightage validation (create/update):** Total cannot exceed 100% — incremental building is allowed.
+- **KR weightage at submit:** When submitting an objective for approval, all KR weightages must sum to exactly 100% or the submit is rejected with a 400.
+- **progress_pct on Objective:** Returns `null` unless KR weightages sum to exactly 100%.
 - **KR RAG status:** auto-computed on value change (not_started → red/amber/green based on progress %).
 - **KR history:** Every value/RAG change creates an immutable record.
 - **Token header:** `Authorization: Token <token>`
@@ -178,8 +180,8 @@ The Zenko OKR Core API is a standalone Django REST Framework project for the Zen
 ### Roles
 | Role | Capabilities |
 |------|-------------|
-| `app_admin` | All operations across all orgs |
-| `org_admin` | Full org access; auto-approves own objectives |
-| `hr_manager` | View all + approve/reject objectives |
-| `team_lead` | View team + approve/reject objectives |
+| `app_admin` | All operations across all orgs (cannot approve/reject objectives) |
+| `org_admin` | Full org access; auto-approves objectives on CREATE; can approve/reject |
+| `hr_manager` | View all; cannot approve/reject objectives |
+| `team_lead` | View team; can approve/reject objectives |
 | `team_member` | Own objectives only; needs approval |

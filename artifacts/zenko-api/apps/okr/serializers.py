@@ -68,19 +68,21 @@ class KeyResultSerializer(serializers.ModelSerializer):
 
     def _validate_total_weightage(self, objective, weightage, instance=None):
         """
-        Enforce that the total weightage of all KRs equals exactly 100%.
-        Returns a 400 if the cumulative total after this create/update != 100.
+        Enforce that the running total of all KR weightages does not exceed 100%.
+        Incremental building is allowed (total < 100 is fine).
+        Exact 100% is enforced at the objective submit/approve checkpoint.
+        progress_pct returns null on the Objective when sum != 100.
         """
         existing = objective.key_results.all()
         if instance:
             existing = existing.exclude(id=instance.id)
         current_total = sum(kr.weightage for kr in existing)
         new_total = current_total + weightage
-        if new_total != 100:
-            remaining = 100 - new_total
+        if new_total > 100:
+            remaining = 100 - current_total
             raise serializers.ValidationError({
                 "error": "Weightage validation failed",
-                "current_total": new_total,
+                "current_total": current_total,
                 "remaining": remaining,
             })
 

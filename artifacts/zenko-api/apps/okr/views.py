@@ -109,6 +109,17 @@ def objective_submit(request, org_id, objective_id):
     if objective.created_by != request.user and not membership.is_admin_level:
         return Response({"detail": "You can only submit your own objectives."}, status=status.HTTP_403_FORBIDDEN)
 
+    kr_total = sum(kr.weightage for kr in objective.key_results.all())
+    if kr_total != 100:
+        return Response(
+            {
+                "detail": "Objective cannot be submitted: Key Result weightages must sum to exactly 100%.",
+                "current_total": kr_total,
+                "remaining": 100 - kr_total,
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     objective.status = Objective.Status.PENDING_APPROVAL
     objective.save(update_fields=["status", "updated_at"])
 
