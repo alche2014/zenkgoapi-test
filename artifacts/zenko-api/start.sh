@@ -4,14 +4,37 @@ set -e
 cd "$(dirname "$0")"
 
 echo "Running Django migrations..."
-# Step 1: Reconcile django_migrations tracking table with the actual DB schema.
-# --fake marks any migrations whose tables already exist as applied without running
-# them. This handles the case where the DB schema is ahead of the migration history
-# (e.g. partial schema from a previous deployment, or tables created out-of-band).
-# python3 manage.py migrate --no-input --fake
 
-# Step 2: Apply any genuinely new migrations from code that haven't been applied
-# to the database yet. This is a no-op when the schema is already current.
+# Check whether the django_migrations tracking table already exists in the DB.
+# If it does, the DB has a prior schema and we need to reconcile the migration
+# history before running migrate (handles cases where migrations were applied
+# directly or in a partial state). If it doesn't exist, this is a fresh DB and
+# we can run migrate normally to create everything from scratch.
+MIGRATIONS_TABLE_EXISTS=$(python3 - <<'EOF'
+import os, django
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "zenko.settings")
+django.setup()
+from django.db import connection
+with connection.cursor() as cursor:
+    cursor.execute(
+        "SELECT EXISTS(SELECT FROM information_schema.tables "
+        "WHERE table_schema='public' AND table_name='django_migrations')"
+    )
+    print("yes" if cursor.fetchone()[0] else "no")
+EOF
+)
+
+if [ "$MIGRATIONS_TABLE_EXISTS" = "yes" ]; then
+    echo "Existing schema detected — reconciling migration history..."
+    # Fake-mark any migrations that are in the codebase but missing from the
+    # django_migrations table. This prevents Django from trying to re-apply
+    # SQL that is already reflected in the database schema.
+    python3 manage.py migrate --no-input --fake
+fi
+
+# Apply any migrations that are genuinely new (not yet in the DB schema).
+# On a fresh DB this creates all tables. On an existing DB after --fake above
+# this is typically a no-op.
 python3 manage.py migrate --no-input
 
 echo "Starting Gunicorn on port ${PORT:-8000}..."
