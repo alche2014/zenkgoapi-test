@@ -40,8 +40,11 @@ def login(request):
 
 @api_view(["POST"])
 def logout(request):
-    request.user.auth_token.delete()
-    return Response({"message": "Logged out successfully."})
+    try:
+        request.user.auth_token.delete()
+    except Exception:
+        pass
+    return Response({"message": "Logged out successfully."}, status=status.HTTP_200_OK)
 
 
 @api_view(["GET"])

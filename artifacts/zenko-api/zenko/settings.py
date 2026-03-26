@@ -7,6 +7,8 @@ SECRET_KEY = config("SECRET_KEY", default="django-insecure-zenko-dev-key-change-
 DEBUG = config("DEBUG", default=False, cast=bool)
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="*").split(",") if not DEBUG else ["*"]
 
+PORT = int(os.environ.get("PORT", 8000))
+
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
