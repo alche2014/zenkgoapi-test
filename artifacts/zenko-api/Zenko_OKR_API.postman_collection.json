@@ -1,0 +1,611 @@
+{
+  "info": {
+    "name": "Zenko OKR API",
+    "_postman_id": "zenko-okr-api-v1",
+    "description": "# Zenko OKR Core API\n\nBase URL: `{{base_url}}/zenko/api/v1/`\n\n## Quick Start (run in order)\n1. **Auth → Register** — creates a user and auto-sets `{{token}}`.\n2. **Organizations → Create Organization** — creates an org and auto-sets `{{org_id}}`.\n3. **Objectives → Create Objective** — org admins are auto-approved; auto-sets `{{obj_id}}`.\n4. **Key Results → Bulk Replace KRs** — atomically sets multiple KRs (total must = 100%); auto-sets `{{kr_id}}`.\n5. Use **Objectives → Submit / Approve** if the objective was created by a non-admin (draft → pending → approved).\n\n## Weightage Rules\n- **Single KR create/update**: the cumulative total including the new KR must equal **exactly 100%**.\n- **Bulk replace** (`PUT /key-results/bulk/`): send an array; the batch total must equal **100%**. Use this to define 2+ KRs in one shot.\n- `progress_pct` on an Objective returns `null` until KR weights sum to 100%.\n\n## Auth\nAll endpoints except `/auth/register/` and `/auth/login/` require:\n```\nAuthorization: Token {{token}}\n```\n\n## Collection Variables\n| Variable | Set by | Description |\n|----------|--------|-------------|\n| `base_url` | Manually | Server host (default `http://localhost:8000`) |\n| `token` | Register / Login response | Bearer token for auth |\n| `org_id` | Create Organization response | Active organization UUID |\n| `obj_id` | Create Objective response | Active objective UUID |\n| `kr_id` | Bulk Replace KRs response (first item) | Active KR UUID |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Base server URL. Change to your deployed host when testing against production."
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "description": "Auth token. Auto-populated by Register or Login."
+    },
+    {
+      "key": "org_id",
+      "value": "",
+      "type": "string",
+      "description": "Organization UUID. Auto-populated by Create Organization."
+    },
+    {
+      "key": "obj_id",
+      "value": "",
+      "type": "string",
+      "description": "Objective UUID. Auto-populated by Create Objective."
+    },
+    {
+      "key": "kr_id",
+      "value": "",
+      "type": "string",
+      "description": "Key Result UUID. Auto-populated by Bulk Replace KRs (first item in response)."
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Token-based authentication. Register or Login to get a token that is used in all subsequent requests.",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('token', body.token);",
+                  "    console.log('Token set:', body.token.slice(0, 8) + '...');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@zenko.com\",\n  \"username\": \"admin\",\n  \"first_name\": \"Admin\",\n  \"last_name\": \"User\",\n  \"password\": \"Zenko@1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/auth/register/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "auth", "register", ""]
+            },
+            "description": "Register a new user. Returns a token that is automatically saved to `{{token}}`. The first user registered will have no org role yet — create an org to become its Org Admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('token', body.token);",
+                  "    console.log('Token set:', body.token.slice(0, 8) + '...');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@zenko.com\",\n  \"password\": \"Zenko@1234\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/auth/login/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "auth", "login", ""]
+            },
+            "description": "Login with email and password. Returns a token that is automatically saved to `{{token}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/auth/logout/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "auth", "logout", ""]
+            },
+            "description": "Invalidates the current token. After this, `{{token}}` must be refreshed via Login."
+          },
+          "response": []
+        },
+        {
+          "name": "Me (Current User)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/auth/me/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "auth", "me", ""]
+            },
+            "description": "Returns the profile of the currently authenticated user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "description": "Multi-tenant organizations. The user who creates an org is automatically assigned the `org_admin` role.",
+      "item": [
+        {
+          "name": "Create Organization",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('org_id', body.id);",
+                  "    console.log('org_id set:', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Zenko Engineering\",\n  \"description\": \"Engineering division of Zenko Corp\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", ""]
+            },
+            "description": "Creates a new organization. The authenticated user is automatically added as `org_admin`. The new org's `id` is saved to `{{org_id}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "List My Organizations",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", ""]
+            },
+            "description": "Lists all organizations the authenticated user belongs to."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Organization Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", ""]
+            },
+            "description": "Returns details for a single organization. Requires membership."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Member",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"lead@zenko.com\",\n  \"username\": \"teamlead1\",\n  \"first_name\": \"Team\",\n  \"last_name\": \"Lead\",\n  \"password\": \"Pass@1234\",\n  \"role\": \"team_lead\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/members/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", ""]
+            },
+            "description": "Add a new or existing user to the organization with a specific role.\n\n**Roles:** `app_admin`, `org_admin`, `hr_manager`, `team_lead`, `team_member`\n\nIf the user does not exist yet, provide `email`, `username`, `first_name`, `last_name`, `password` — the account will be created. If the user already exists, provide only `user_id` and `role`."
+          },
+          "response": []
+        },
+        {
+          "name": "List Members",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/members/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "members", ""]
+            },
+            "description": "Lists all members of the organization along with their roles."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Objectives",
+      "description": "OKR Objectives with a full lifecycle state machine.\n\n**Lifecycle:** `draft` → `pending_approval` → `approved` / `rejected` → `archived`\n\n- Org admins skip the approval queue — their objectives are set to `approved` immediately on creation.\n- Team members create `draft` objectives and must call **Submit** before an org admin or team lead can approve.",
+      "item": [
+        {
+          "name": "Create Objective",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('obj_id', body.id);",
+                  "    console.log('obj_id set:', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Increase ARR by 30%\",\n  \"description\": \"Grow annual recurring revenue by expanding enterprise accounts and reducing churn.\",\n  \"owner_id\": 1,\n  \"priority\": \"high\",\n  \"due_date\": \"2026-09-30\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", ""]
+            },
+            "description": "Creates a new Objective.\n\n- **Org admins** → status is `approved` immediately.\n- **Other roles** → status is `draft`; must be submitted for approval.\n\nThe `quarter` field is auto-computed from `due_date`. The new objective's `id` is saved to `{{obj_id}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "List Objectives",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", ""]
+            },
+            "description": "Lists all active (non-archived) objectives for the organization. Includes `progress_pct` for each objective (null if KR weights ≠ 100%)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Objective Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", ""]
+            },
+            "description": "Returns the full objective with all nested Key Results and weighted `progress_pct`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Objective",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Increase ARR by 35%\",\n  \"priority\": \"high\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", ""]
+            },
+            "description": "Partially updates an objective. Only the fields provided are changed. Archived objectives cannot be edited."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Objective",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", ""]
+            },
+            "description": "Permanently deletes an objective and all its Key Results. Admins can delete any objective; other users can only delete their own."
+          },
+          "response": []
+        },
+        {
+          "name": "Submit Objective for Approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/submit/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "submit", ""]
+            },
+            "description": "Transitions objective from `draft` → `pending_approval`.\n\n**Prerequisite:** All Key Result weightages must sum to exactly 100% or this call returns HTTP 400."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Objective",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/approve/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "approve", ""]
+            },
+            "description": "Transitions objective from `pending_approval` → `approved`.\n\n**Allowed roles:** `org_admin`, `team_lead`."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Objective",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Scope is too broad. Please narrow to a single product area.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/reject/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "reject", ""]
+            },
+            "description": "Transitions objective from `pending_approval` → `rejected`. A `reason` is **required**.\n\n**Allowed roles:** `org_admin`, `team_lead`."
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Objective",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "" },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/archive/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "archive", ""]
+            },
+            "description": "Archives an objective. Archived objectives are excluded from the list view.\n\n**Allowed roles:** admins only."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Key Results",
+      "description": "Key Results (KRs) belong to an Objective and track measurable progress.\n\n**Weightage rules:**\n- **Single create/update**: the running total of all sibling KRs including the new one must equal exactly **100%**. This means a single KR must be set to 100, or use Bulk Replace to define multiple KRs atomically.\n- **Bulk Replace**: send an array — the batch total must equal **100%**.\n- `progress_pct` on the parent Objective returns `null` until the total equals 100%.\n\n**RAG status** is auto-computed on every value update:\n- `not_started` → no history yet\n- `green` ≥ 100% progress\n- `amber` ≥ 80% progress\n- `red` < 80% progress",
+      "item": [
+        {
+          "name": "Create Single KR (100% weightage)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('kr_id', body.id);",
+                  "    console.log('kr_id set:', body.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Monthly Recurring Revenue\",\n  \"metric_label\": \"MRR in USD\",\n  \"type\": \"currency\",\n  \"start_value\": 100000,\n  \"target_value\": 130000,\n  \"current_value\": 100000,\n  \"unit\": \"USD\",\n  \"owner_id\": 1,\n  \"due_date\": \"2026-09-30\",\n  \"weightage\": 100\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", ""]
+            },
+            "description": "Creates a single Key Result. The cumulative total of all KR weightages for this objective **must equal exactly 100%** after this operation, or the request is rejected with HTTP 400.\n\nTo define 2+ KRs, use **Bulk Replace KRs** instead.\n\n**KR types:** `numeric`, `percentage`, `boolean`, `currency`\n\nThe new KR's `id` is saved to `{{kr_id}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "List Key Results",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", ""]
+            },
+            "description": "Returns all Key Results for the given objective."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk Replace KRs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (Array.isArray(body) && body.length > 0) {",
+                  "        pm.collectionVariables.set('kr_id', body[0].id);",
+                  "        console.log('kr_id set to first KR:', body[0].id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"title\": \"Monthly Recurring Revenue\",\n    \"metric_label\": \"MRR in USD\",\n    \"type\": \"currency\",\n    \"start_value\": 100000,\n    \"target_value\": 130000,\n    \"current_value\": 100000,\n    \"unit\": \"USD\",\n    \"owner_id\": 1,\n    \"due_date\": \"2026-09-30\",\n    \"weightage\": 60\n  },\n  {\n    \"title\": \"New Enterprise Customers\",\n    \"metric_label\": \"Enterprise accounts signed\",\n    \"type\": \"numeric\",\n    \"start_value\": 0,\n    \"target_value\": 10,\n    \"current_value\": 0,\n    \"unit\": \"accounts\",\n    \"owner_id\": 1,\n    \"due_date\": \"2026-09-30\",\n    \"weightage\": 40\n  }\n]"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/bulk/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", "bulk", ""]
+            },
+            "description": "Atomically **replaces all** existing KRs for this objective with the provided array. The sum of all `weightage` values in the array **must equal 100%**.\n\nUse this endpoint to define 2 or more KRs with split weightages (e.g. 60/40, 50/30/20).\n\nThe first KR's `id` in the response is saved to `{{kr_id}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get KR Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/{{kr_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", "{{kr_id}}", ""]
+            },
+            "description": "Returns the full detail for a single Key Result including `progress_pct` and `history_count`."
+          },
+          "response": []
+        },
+        {
+          "name": "Update KR Value",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_value\": 115000,\n  \"note\": \"Q1 close — MRR grew to $115k\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/{{kr_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", "{{kr_id}}", ""]
+            },
+            "description": "Partially updates a Key Result. When `current_value` changes, the RAG status is recomputed and an immutable history entry is created automatically.\n\nOptional `note` is stored on the history entry."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete KR",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/{{kr_id}}/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", "{{kr_id}}", ""]
+            },
+            "description": "Permanently deletes a Key Result. Only the KR owner, co-owner, objective owner, or an admin may delete."
+          },
+          "response": []
+        },
+        {
+          "name": "Get KR History",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Token {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/zenko/api/v1/organizations/{{org_id}}/objectives/{{obj_id}}/key-results/{{kr_id}}/history/",
+              "host": ["{{base_url}}"],
+              "path": ["zenko", "api", "v1", "organizations", "{{org_id}}", "objectives", "{{obj_id}}", "key-results", "{{kr_id}}", "history", ""]
+            },
+            "description": "Returns the immutable audit log of all value and RAG status changes for this KR, newest first. Each entry records `previous_value`, `new_value`, `previous_rag_status`, `new_rag_status`, `note`, `updated_by`, and `recorded_at`."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
