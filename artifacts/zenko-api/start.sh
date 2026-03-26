@@ -8,7 +8,7 @@ echo "Running Django migrations..."
 # --fake marks any migrations whose tables already exist as applied without running
 # them. This handles the case where the DB schema is ahead of the migration history
 # (e.g. partial schema from a previous deployment, or tables created out-of-band).
-python3 manage.py migrate --no-input --fake
+# python3 manage.py migrate --no-input --fake
 
 # Step 2: Apply any genuinely new migrations from code that haven't been applied
 # to the database yet. This is a no-op when the schema is already current.
